@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EU261 Flight Compensation Checker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-slate-50 flex items-center justify-center min-h-screen p-4 text-slate-800">
+
+    <div class="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full border border-slate-100">
+        <div class="mb-4 text-center">
+            <div class="inline-flex items-center justify-center w-12 h-12 rounded-full bg-blue-100 text-blue-600 mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+            </div>
+            <h1 class="text-2xl font-bold text-slate-900 mb-2">Flight Claim Checker</h1>
+            <p class="text-slate-500 text-sm">Find out if you are eligible for up to €600 in EU261 compensation for your disrupted flight.</p>
+        </div>
+
+        <div class="flex border-b border-slate-200 mb-6">
+            <button id="tabManual" class="w-1/2 py-3 text-center font-medium text-blue-600 border-b-2 border-blue-600 transition-colors">
+                Manual Entry
+            </button>
+            <button id="tabGmail" class="w-1/2 py-3 text-center font-medium text-slate-500 hover:text-slate-700 border-b-2 border-transparent transition-colors">
+                Auto-Scan Gmail
+            </button>
+        </div>
+
+        <div id="manualSection" class="block">
+            <form id="claimForm" class="space-y-5">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Flight Number</label>
+                    <input type="text" id="flightNumber" placeholder="e.g., BA123" required
+                        class="block w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Flight Date</label>
+                    <input type="date" id="flightDate" required
+                        class="block w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-slate-700">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">What happened?</label>
+                    <textarea id="delayReason" rows="3" placeholder="e.g., The flight was delayed by 4 hours due to technical issues..." required
+                        class="block w-full px-4 py-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all resize-none"></textarea>
+                </div>
+
+                <button type="submit" id="submitBtn"
+                    class="w-full bg-blue-600 text-white font-semibold py-3 px-4 rounded-lg hover:bg-blue-700 focus:ring-4 focus:ring-blue-200 transition-all duration-200 shadow-sm flex justify-center items-center gap-2">
+                    <span>Check Eligibility</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                    </svg>
+                </button>
+            </form>
+        </div>
+
+        <div id="gmailSection" class="hidden text-center py-2">
+            <div class="bg-indigo-50 border border-indigo-100 p-5 rounded-xl text-sm mb-6 text-left">
+                <div class="flex items-center gap-2 font-semibold text-indigo-900 mb-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M11.3 1.046A12.014 12.014 0 0010.399 0a11.99 11.99 0 00-1.53.155A12.006 12.006 0 002.775 5.568 12.03 12.03 0 001.045 11.3a11.99 11.99 0 00-.154 1.53c0 .546.06 1.082.176 1.603A12.006 12.006 0 005.568 20.225a12.03 12.03 0 005.732 1.731c.546.06 1.082.175 1.603.175.546 0 1.082-.06 1.603-.175a12.03 12.03 0 005.732-1.731 12.006 12.006 0 004.498-5.759c.117-.521.176-1.057.176-1.603a11.99 11.99 0 00-.154-1.53 12.03 12.03 0 00-1.731-5.732 12.006 12.006 0 00-5.759-4.498c-.521-.117-1.057-.176-1.603-.176zM7.5 10.5a3 3 0 116 0 3 3 0 01-6 0z" clip-rule="evenodd" />
+                    </svg>
+                    How it works on auto-pilot
+                </div>
+                <p class="text-indigo-800">
+                    Connect your Gmail account, and our n8n-powered AI agent will securely monitor your inbox for flight cancellation or delay emails. 
+                    If we find an eligible claim, we'll automatically generate a claim and save it to your drafts folder.
+                </p>
+            </div>
+            
+            <button id="googleAuthBtn" class="w-full bg-white border border-slate-300 text-slate-700 font-semibold py-3 px-4 rounded-lg hover:bg-slate-50 hover:shadow-md transition-all duration-200 shadow-sm flex justify-center items-center gap-3">
+                <svg class="w-5 h-5" viewBox="0 0 48 48">
+                    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                    <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+                    <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+                    <path fill="none" d="M0 0h48v48H0z"/>
+                </svg>
+                <span id="googleAuthText">Sign in with Google</span>
+                <svg id="googleSpinner" class="hidden animate-spin h-5 w-5 text-slate-500 ml-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+            </button>
+            <p class="text-xs text-slate-400 mt-4">We only request read-only access to emails related to airlines and flight bookings.</p>
+        </div>
+
+        <div id="gmailSuccess" class="hidden text-center py-6">
+            <div class="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-green-100 mb-4">
+                <svg class="h-8 w-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+            </div>
+            <h3 class="text-xl font-bold text-slate-900 mb-2">Inbox Connected!</h3>
+            <p class="text-slate-600 mb-6">Your n8n automation is now actively listening for flight delays. If we spot an eligible claim, you'll see a draft ready in your Gmail.</p>
+            <button id="disconnectGmailBtn" class="text-sm font-medium text-slate-500 hover:text-red-500 transition-colors underline">
+                Disconnect Account
+            </button>
+        </div>
+
+        <div id="loading" class="hidden py-8 text-center">
+            <svg class="animate-spin h-10 w-10 text-blue-600 mx-auto mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <h3 class="text-slate-900 font-medium mb-1">Analyzing Guidelines...</h3>
+            <p class="text-sm text-slate-500">Our AI agent is reviewing EU261 regulations against your case.</p>
+        </div>
+
+        <div id="result" class="hidden mt-2 p-5 rounded-xl border transition-all duration-300">
+            <div class="flex items-start gap-3 mb-3">
+                <div id="resultIcon"></div>
+                <h3 id="resultTitle" class="font-bold text-lg mt-0.5"></h3>
+            </div>
+            <p id="resultMessage" class="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed"></p>
+            
+            <button id="resetBtn" class="mt-5 w-full bg-slate-100 text-slate-700 font-medium py-2 px-4 rounded-lg hover:bg-slate-200 transition-colors">
+                Check Another Flight
+            </button>
+        </div>
+    </div>
+
+    <script src="scripts.js"></script>
+</body>
+</html>
