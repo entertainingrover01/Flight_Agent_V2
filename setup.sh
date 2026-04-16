@@ -1,39 +1,31 @@
 #!/bin/bash
 
-# Bureaucracy Hacker - One-Step Setup Script
+echo "Bureaucracy Hacker setup"
+echo "========================"
+echo
 
-echo "🚀 Bureaucracy Hacker Setup"
-echo "=============================="
-echo ""
-
-# Check Python version
-echo "Checking Python..."
 python3 --version
 
-# Install backend dependencies
-echo ""
-echo "📦 Installing backend dependencies..."
-cd backend
-pip install -r requirements.txt -q
+echo
+echo "Installing backend dependencies..."
+cd backend || exit 1
+python3 -m pip install -r requirements.txt
 
-# Copy .env template
-echo ""
-echo "📝 Creating .env file..."
+echo
+echo "Creating backend/.env from template if needed..."
 if [ ! -f .env ]; then
     cp .env.example .env
-    echo "✅ .env created. Edit it to add your ANTHROPIC_API_KEY"
+    echo "Created backend/.env"
 else
-    echo "✅ .env already exists"
+    echo "backend/.env already exists"
 fi
 
-cd ..
+cd .. || exit 1
 
-echo ""
-echo "✅ Setup complete!"
-echo ""
-echo "📋 Next steps:"
-echo "  1. Edit backend/.env and add your ANTHROPIC_API_KEY"
-echo "  2. Run: python backend/main.py     (Terminal 1)"
-echo "  3. Run: python -m http.server 8000 (Terminal 2)"
-echo "  4. Visit: http://localhost:8000"
-echo ""
+echo
+echo "Next steps:"
+echo "  1. Add GOOGLE_API_KEY to backend/.env"
+echo "  2. Add GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET if using Gmail scan"
+echo "  3. Run backend: cd backend && ../.venv/bin/uvicorn main:app --host 127.0.0.1 --port 8001"
+echo "  4. Run frontend: python3 -m http.server 8000"
+echo "  5. Open: http://localhost:8000"

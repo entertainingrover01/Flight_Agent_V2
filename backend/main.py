@@ -1,23 +1,52 @@
 """
 FastAPI Backend for Bureaucracy Hacker
-Exposes agent endpoints for flight compensation analysis
+Exposes Gemini-backed endpoints for flight compensation analysis.
 """
-import os
-import asyncio
+from collections import deque
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from typing import Optional
 import logging
 
+# Load environment variables from .env file
+load_dotenv()
+
 # Import our agent and models
 from agents.claim_agent import get_agent
+from gmail_service import (
+    GmailConfigurationError,
+    build_formal_claim_letter,
+    callback_redirect,
+    disconnect_gmail,
+    exchange_code_for_token,
+    get_authorization_url,
+    gmail_status,
+    scan_inbox_for_claims,
+)
 from models.schemas import ClaimRequest, ClaimResponse
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+log_buffer = deque(maxlen=200)
+
+
+class InMemoryLogHandler(logging.Handler):
+    """Keep a rolling in-memory copy of logs for the demo dashboard."""
+
+    def emit(self, record):
+        try:
+            log_buffer.append(self.format(record))
+        except Exception:
+            pass
+
+
+memory_handler = InMemoryLogHandler()
+memory_handler.setLevel(logging.INFO)
+memory_handler.setFormatter(logging.Formatter("%(levelname)s:%(name)s:%(message)s"))
+logging.getLogger().addHandler(memory_handler)
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -64,23 +93,7 @@ async def api_health():
 @app.post("/api/analyze-claim", response_model=ClaimResponse)
 async def analyze_claim(request: ClaimRequest) -> ClaimResponse:
     """
-    Analyze a flight compensation claim
-    
-    This endpoint:
-    1. Receives flight delay details from user
-    2. Passes to Claude Agent via LangChain
-    3. Agent verifies flight, checks weather, searches regulations
-    4. Returns eligibility decision + claim letter
-    
-    Example request:
-    {
-        "flight_number": "BA123",
-        "flight_date": "2024-01-15",
-        "delay_reason": "Technical issues",
-        "delay_minutes": 300,
-        "passenger_email": "user@example.com",
-        "jurisdiction": "EU"
-    }
+    Analyze a manually entered flight compensation claim.
     """
     
     logger.info(f"Analyzing claim for flight {request.flight_number}")
@@ -112,33 +125,79 @@ async def analyze_claim(request: ClaimRequest) -> ClaimResponse:
             detail=f"Error analyzing claim: {str(e)}"
         )
 
-# ============================================================================
-# ALTERNATIVE ENDPOINTS (for different input types)
-# ============================================================================
+@app.get("/api/gmail/status")
+async def gmail_connection_status():
+    """Return Gmail OAuth configuration and connection status."""
+    return gmail_status()
 
-@app.post("/api/analyze-from-email")
-async def analyze_from_email(request: dict):
-    """
-    Analyze a claim from a raw email
-    (Useful for n8n integration)
-    
-    Example:
-    {
-        "email_subject": "Your flight BA123 has been delayed",
-        "email_body": "Dear passenger, your flight BA123 from LHR to JFK on 2024-01-15 has been delayed by 4 hours due to technical issues...",
-        "passenger_email": "user@example.com"
-    }
-    """
-    
+
+@app.get("/api/gmail/connect")
+async def gmail_connect():
+    """Start Google OAuth for Gmail access."""
     try:
-        # In production, use NLP to extract from email
-        # For now, return error
+        authorization_url = get_authorization_url()
+        return RedirectResponse(url=authorization_url, status_code=302)
+    except GmailConfigurationError as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get("/api/gmail/callback")
+async def gmail_callback(code: Optional[str] = None, state: Optional[str] = None, error: Optional[str] = None):
+    """Handle Google OAuth callback and return user to the frontend."""
+    if error:
+        return RedirectResponse(url=callback_redirect(False, error), status_code=302)
+    if not code or not state:
+        return RedirectResponse(url=callback_redirect(False, "Missing OAuth code"), status_code=302)
+
+    try:
+        exchange_code_for_token(code=code, state=state)
+        return RedirectResponse(url=callback_redirect(True, "Gmail connected"), status_code=302)
+    except Exception as exc:
+        return RedirectResponse(url=callback_redirect(False, str(exc)), status_code=302)
+
+
+@app.post("/api/gmail/disconnect")
+async def gmail_disconnect():
+    """Remove locally stored Gmail credentials."""
+    disconnect_gmail()
+    return {"status": "disconnected"}
+
+
+@app.post("/api/gmail/scan")
+async def gmail_scan():
+    """Scan Gmail for flight disruption emails, then analyze the best match."""
+    try:
+        scan_result = scan_inbox_for_claims()
+        if scan_result["status"] != "match_found":
+            return scan_result
+
+        claim_data = scan_result["claim_data"]
+        logger.info(
+            "Running claim analysis from Gmail email for flight %s",
+            claim_data["flight_number"]
+        )
+        result = await get_agent().analyze_claim(claim_data)
+        analysis_payload = result.model_dump()
+        analysis_payload["claim_letter"] = build_formal_claim_letter(
+            analysis=analysis_payload,
+            claim_data=claim_data,
+            extracted_email_data=scan_result["extracted_email_data"],
+            contact_email="krishnachapai500@gmail.com",
+        )
         return {
-            "status": "not_implemented",
-            "message": "Email parsing coming soon. Please use /api/analyze-claim endpoint instead."
+            "status": "analyzed",
+            "message": scan_result["message"],
+            "emails_scanned": scan_result["emails_scanned"],
+            "claim_data": claim_data,
+            "source_email": scan_result["source_email"],
+            "extracted_email_data": scan_result["extracted_email_data"],
+            "analysis": analysis_payload,
         }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except GmailConfigurationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        logger.exception("Gmail scan failed")
+        raise HTTPException(status_code=500, detail=str(exc))
 
 @app.get("/api/regulations/{jurisdiction}")
 async def get_regulations(jurisdiction: str = "EU"):
@@ -178,40 +237,108 @@ async def get_regulations(jurisdiction: str = "EU"):
     
     return regulations_db[jurisdiction.upper()]
 
-@app.get("/api/claim-status/{claim_id}")
-async def claim_status(claim_id: str):
-    """
-    Get status of a submitted claim
-    (Would query database in production)
-    """
-    
-    return {
-        "claim_id": claim_id,
-        "status": "In development",
-        "message": "Claim tracking coming soon"
-    }
-
-# ============================================================================
-# UTILITIES
-# ============================================================================
-
-@app.get("/")
+@app.get("/", response_class=HTMLResponse)
 async def root():
-    """Root endpoint"""
-    return {
-        "service": "Bureaucracy Hacker API",
-        "version": "1.0.0",
-        "endpoints": {
-            "health": "/health",
-            "analyze_claim": "POST /api/analyze-claim",
-            "regulations": "GET /api/regulations/{jurisdiction}",
-            "docs": "/docs"
-        }
+    """Simple browser dashboard for recent backend activity."""
+    return """
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bureaucracy Hacker API Logs</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #111827;
+      --text: #e5e7eb;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --border: #1f2937;
     }
+    body {
+      margin: 0;
+      padding: 32px;
+      background: radial-gradient(circle at top, #172554, var(--bg) 55%);
+      color: var(--text);
+      font-family: Menlo, Monaco, Consolas, monospace;
+    }
+    h1 { margin: 0 0 8px; font-size: 28px; }
+    p { margin: 0 0 20px; color: var(--muted); }
+    .panel {
+      border: 1px solid var(--border);
+      background: rgba(17, 24, 39, 0.92);
+      border-radius: 16px;
+      padding: 18px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+    }
+    .row {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 14px;
+      color: var(--muted);
+      font-size: 14px;
+      flex-wrap: wrap;
+    }
+    .badge {
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      color: var(--accent);
+      border-radius: 999px;
+      padding: 4px 10px;
+    }
+    pre {
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      line-height: 1.5;
+      min-height: 420px;
+      max-height: 70vh;
+      overflow: auto;
+    }
+    a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <h1>Bureaucracy Hacker API</h1>
+  <p>Recent backend activity. Submit a claim from the frontend and the steps will appear here.</p>
+  <div class="panel">
+    <div class="row">
+      <span class="badge">Live Logs</span>
+      <span>Frontend: <a href="http://localhost:8000">localhost:8000</a></span>
+      <span>API endpoint: <code>POST /api/analyze-claim</code></span>
+    </div>
+    <pre id="logs">Loading logs...</pre>
+  </div>
+  <script>
+    async function refreshLogs() {
+      try {
+        const response = await fetch('/api/logs');
+        const data = await response.json();
+        const text = data.logs.length ? data.logs.join('\\n') : 'No logs yet. Submit a claim from the frontend.';
+        const el = document.getElementById('logs');
+        el.textContent = text;
+        el.scrollTop = el.scrollHeight;
+      } catch (error) {
+        document.getElementById('logs').textContent = 'Unable to load logs: ' + error.message;
+      }
+    }
+    refreshLogs();
+    setInterval(refreshLogs, 1000);
+  </script>
+</body>
+</html>
+"""
+
+
+@app.get("/api/logs")
+async def get_logs():
+    """Expose recent log lines for the demo dashboard."""
+    return {"logs": list(log_buffer)}
 
 @app.get("/docs")
 async def docs():
-    """API documentation"""
+    """Simple API summary."""
     return {
         "title": "Bureaucracy Hacker API Documentation",
         "version": "1.0.0",
@@ -228,6 +355,21 @@ async def docs():
                     "jurisdiction": "string (default: EU)"
                 },
                 "response": "ClaimResponse object"
+            },
+            {
+                "method": "GET",
+                "path": "/api/gmail/status",
+                "description": "Check Gmail OAuth status"
+            },
+            {
+                "method": "GET",
+                "path": "/api/gmail/connect",
+                "description": "Start Gmail OAuth"
+            },
+            {
+                "method": "POST",
+                "path": "/api/gmail/scan",
+                "description": "Scan Gmail and analyze a matched flight disruption email"
             }
         ]
     }
@@ -271,7 +413,6 @@ async def shutdown_event():
 if __name__ == "__main__":
     import uvicorn
     
-    # Run: python backend/main.py
     uvicorn.run(
         "main:app",
         host="127.0.0.1",

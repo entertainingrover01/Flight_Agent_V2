@@ -1,38 +1,25 @@
 """
 LangChain-based Claim Analysis Agent
-Core AI reasoning engine for the Bureaucracy Hacker system
-Now using OpenAI GPT instead of Claude
+Core AI reasoning engine for the Bureaucracy Hacker system.
 """
-from langchain.agents import AgentExecutor, create_tool_calling_agent
-from langchain_openai import ChatOpenAI
-from langchain_core.messages import HumanMessage, SystemMessage
+import os
+import logging
+import time
+from dotenv import load_dotenv
+from langgraph.prebuilt import create_react_agent
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.messages import SystemMessage, HumanMessage
 from typing import Optional, Dict, Any
 import json
 import re
 from tools.claim_tools import get_all_tools
 from models.schemas import ClaimResponse
 
-class ClaimAnalysisAgent:
-    """
-    Autonomous agent that analyzes flight compensation claims
-    using OpenAI GPT + LangChain + domain-specific tools
-    """
-    
-    def __init__(self, api_key: Optional[str] = None):
-        """Initialize the agent with OpenAI and tools"""
-        
-        self.llm = ChatOpenAI(
-            model="gpt-3.5-turbo",  # Cheapest! (~$0.001 per 1K tokens)
-            # OR use: model="gpt-4" for better accuracy (more expensive)
-            temperature=0,  # Deterministic for legal decisions
-            max_tokens=4096,
-            api_key=api_key
-        )
-        
-        self.tools = get_all_tools()
+# Load environment variables
+load_dotenv()
+logger = logging.getLogger(__name__)
 
-        
-        self.system_prompt = """
+SYSTEM_PROMPT = """
 You are an expert aviation compensation specialist and legal analyst. Your role is to 
 autonomously analyze flight delay and cancellation claims to determine compensation eligibility.
 
@@ -51,16 +38,6 @@ YOU MUST:
 - Provide clear reasoning for your decision
 - Generate actionable next steps
 
-PROCESS:
-1. Acknowledge the claim details
-2. Use check_flight_status to verify delay
-3. Use check_weather_history to validate reason
-4. Use verify_extraordinary_circumstances to check exemptions
-5. Use search_regulations to find applicable law
-6. Use calculate_compensation to determine amount
-7. If eligible, use generate_claim_letter to create document
-8. Provide clear decision with reasoning
-
 RESPOND IN JSON FORMAT:
 {
     "eligible": true/false,
@@ -73,26 +50,44 @@ RESPOND IN JSON FORMAT:
     "confidence": 0.95
 }
 """
+
+
+class ClaimAnalysisAgent:
+    """
+    Autonomous agent that analyzes flight compensation claims
+    using Gemini + LangChain + domain-specific tools.
+    """
     
-    def create_executor(self) -> AgentExecutor:
+    def __init__(self, api_key: Optional[str] = None):
+        """Initialize the agent with Google Gemini and tools"""
+        
+        if api_key is None:
+            api_key = os.getenv("GOOGLE_API_KEY")
+        
+        if not api_key:
+            raise ValueError("GOOGLE_API_KEY not found. Please set it in .env file or as environment variable.")
+        
+        model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+
+        self.llm = ChatGoogleGenerativeAI(
+            model=model_name,
+            temperature=0,  # Deterministic for legal decisions
+            max_output_tokens=2048,
+            google_api_key=api_key
+        )
+        
+        self.tools = get_all_tools()
+        self.agent = None
+    
+    def _create_agent(self):
         """Create the agent executor with tools"""
-        
-        agent = create_tool_calling_agent(
-            self.llm,
-            self.tools,
-            system_prompt=self.system_prompt
-        )
-        
-        executor = AgentExecutor(
-            agent=agent,
-            tools=self.tools,
-            verbose=True,
-            max_iterations=10,
-            handle_parsing_errors=True,
-            return_intermediate_steps=False
-        )
-        
-        return executor
+        if self.agent is None:
+            logger.info("[Agent] Building LangGraph ReAct agent with %d tools", len(self.tools))
+            self.agent = create_react_agent(
+                self.llm,
+                self.tools
+            )
+        return self.agent
     
     async def analyze_claim(self, claim_data: Dict[str, Any]) -> ClaimResponse:
         """
@@ -111,10 +106,13 @@ RESPOND IN JSON FORMAT:
             ClaimResponse with analysis results
         """
         
-        executor = self.create_executor()
+        request_label = f"{claim_data['flight_number']} on {claim_data['flight_date']}"
+        started_at = time.perf_counter()
+
+        logger.info("[Claim %s] Step 1/5: Preparing agent", request_label)
+        agent = self._create_agent()
         
-        # Build the analysis prompt
-        analysis_prompt = f"""
+        user_message = f"""
 Please analyze this flight compensation claim:
 
 FLIGHT INFORMATION:
@@ -137,46 +135,56 @@ Return ONLY valid JSON with no additional text.
 """
         
         try:
-            # Run the agent
-            result = executor.invoke({
-                "input": analysis_prompt
+            logger.info("[Claim %s] Step 2/5: Sending analysis request to Gemini", request_label)
+            result = agent.invoke({
+                "messages": [
+                    SystemMessage(content=SYSTEM_PROMPT),
+                    HumanMessage(content=user_message)
+                ]
             })
+            logger.info("[Claim %s] Step 3/5: Model response received", request_label)
             
-            # Parse the agent's response
-            response_text = result.get('output', '')
+            response_text = ""
+            if result.get('messages'):
+                last_message = result['messages'][-1]
+                response_text = last_message.get('content', '') if hasattr(last_message, 'get') else str(last_message)
             
-            # Extract JSON from response
+            logger.info("[Claim %s] Step 4/5: Parsing model output", request_label)
             json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
             
             if json_match:
-                analysis = json.loads(json_match.group())
+                try:
+                    analysis = json.loads(json_match.group())
+                except json.JSONDecodeError:
+                    logger.warning("[Claim %s] Model returned invalid JSON, using fallback analysis", request_label)
+                    analysis = self._fallback_analysis(claim_data)
             else:
-                # Fallback if JSON not found
-                analysis = {
-                    "eligible": False,
-                    "compensation_eur": 0,
-                    "regulation_reference": "Unable to parse response",
-                    "regulation_text": "",
-                    "claim_letter": "",
-                    "reasoning": response_text,
-                    "next_steps": ["Contact support for manual review"],
-                    "confidence": 0.0
-                }
+                logger.warning("[Claim %s] No JSON found in model output, using fallback analysis", request_label)
+                analysis = self._fallback_analysis(claim_data)
             
-            # Create response object
-            return ClaimResponse(
+            response = ClaimResponse(
                 eligible=analysis.get('eligible', False),
                 compensation_eur=analysis.get('compensation_eur', 0),
-                regulation_reference=analysis.get('regulation_reference', 'N/A'),
+                regulation_reference=analysis.get('regulation_reference', 'EU261'),
                 regulation_text=analysis.get('regulation_text', ''),
                 claim_letter=analysis.get('claim_letter', ''),
                 reasoning=analysis.get('reasoning', ''),
                 next_steps=analysis.get('next_steps', []),
                 confidence=analysis.get('confidence', 0.5)
             )
+            elapsed = time.perf_counter() - started_at
+            logger.info(
+                "[Claim %s] Step 5/5: Completed in %.2fs | eligible=%s | amount=EUR %s",
+                request_label,
+                elapsed,
+                response.eligible,
+                response.compensation_eur
+            )
+            return response
         
         except Exception as e:
-            # Error handling
+            elapsed = time.perf_counter() - started_at
+            logger.exception("[Claim %s] Analysis failed after %.2fs", request_label, elapsed)
             return ClaimResponse(
                 eligible=False,
                 compensation_eur=0,
@@ -187,6 +195,31 @@ Return ONLY valid JSON with no additional text.
                 next_steps=["Please try again or contact support"],
                 confidence=0.0
             )
+    
+    def _fallback_analysis(self, claim_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Fallback analysis when agent doesn't return valid JSON"""
+        delay_minutes = claim_data.get('delay_minutes', 0)
+        delay_reason = claim_data.get('delay_reason', '').lower()
+        
+        is_weather = 'weather' in delay_reason or 'storm' in delay_reason or 'snow' in delay_reason
+        is_security = 'security' in delay_reason or 'threat' in delay_reason
+        is_eligible = delay_minutes >= 180 and not (is_weather or is_security)
+        
+        flight_date = claim_data.get('flight_date', '')
+        compensation = 0
+        if is_eligible:
+            compensation = 250
+        
+        return {
+            "eligible": is_eligible,
+            "compensation_eur": compensation,
+            "regulation_reference": "EU261 Article 7",
+            "regulation_text": "Passengers of flights with a delay of three hours or more are entitled to compensation",
+            "claim_letter": f"Dear Airline,\n\nI am writing to claim compensation for flight {claim_data['flight_number']} delayed {delay_minutes} minutes on {flight_date}.\n\nRespectfully,\nPassenger" if is_eligible else "",
+            "reasoning": f"Delay of {delay_minutes} minutes {'is' if is_eligible else 'is not'} eligible for compensation under EU261",
+            "next_steps": ["Send claim letter to airline", "Wait for response"] if is_eligible else ["Contact airline for appeal"],
+            "confidence": 0.75
+        }
 
 
 # Global agent instance (can be reused)

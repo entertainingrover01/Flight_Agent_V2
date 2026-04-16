@@ -69,8 +69,8 @@
                     How it works on auto-pilot
                 </div>
                 <p class="text-indigo-800">
-                    Connect your Gmail account, and our n8n-powered AI agent will securely monitor your inbox for flight cancellation or delay emails. 
-                    If we find an eligible claim, we'll automatically generate a claim and save it to your drafts folder.
+                    Connect your Gmail account directly to this app, and it can scan recent flight-related emails in your inbox.
+                    When it finds a likely disruption email, it will analyze the claim here using the same backend agent.
                 </p>
             </div>
             
@@ -88,6 +88,7 @@
                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
             </button>
+            <p id="gmailStatusText" class="text-sm text-slate-500 mt-4">Connect Gmail to scan recent flight disruption emails directly from this app.</p>
             <p class="text-xs text-slate-400 mt-4">We only request read-only access to emails related to airlines and flight bookings.</p>
         </div>
 
@@ -98,7 +99,13 @@
                 </svg>
             </div>
             <h3 class="text-xl font-bold text-slate-900 mb-2">Inbox Connected!</h3>
-            <p class="text-slate-600 mb-6">Your n8n automation is now actively listening for flight delays. If we spot an eligible claim, you'll see a draft ready in your Gmail.</p>
+            <p class="text-slate-600 mb-4">Your Gmail account is connected to this app. Scan the inbox to find recent airline delay or cancellation emails and analyze them here.</p>
+            <button id="scanGmailBtn" class="w-full bg-blue-600 text-white font-semibold py-3 px-4 rounded-lg hover:bg-blue-700 focus:ring-4 focus:ring-blue-200 transition-all duration-200 shadow-sm mb-4">
+                Scan Inbox Now
+            </button>
+            <div id="gmailScanResult" class="hidden text-left bg-slate-50 border border-slate-200 rounded-xl p-4 mb-4">
+                <p id="gmailScanMessage" class="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed"></p>
+            </div>
             <button id="disconnectGmailBtn" class="text-sm font-medium text-slate-500 hover:text-red-500 transition-colors underline">
                 Disconnect Account
             </button>
@@ -126,6 +133,50 @@
         </div>
     </div>
 
-    <script src="scripts.js"></script>
+    <div id="gmailFoundScreen" class="hidden w-full max-w-5xl bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden">
+        <div class="bg-slate-950 text-white px-8 py-8">
+            <p class="text-xs uppercase tracking-[0.3em] text-sky-300 mb-3">Gmail Match Found</p>
+            <h2 class="text-3xl font-bold mb-2">Flight disruption email detected</h2>
+            <p id="gmailFoundSubtitle" class="text-slate-300 max-w-2xl">We found a flight-related email, extracted the key disruption details, and generated a formal EU261 compensation draft.</p>
+        </div>
+
+        <div class="grid lg:grid-cols-[1.05fr,1.35fr] gap-0">
+            <section class="p-8 border-b lg:border-b-0 lg:border-r border-slate-200 bg-slate-50">
+                <div class="mb-6">
+                    <p class="text-xs uppercase tracking-[0.25em] text-slate-500 mb-2">Matched Email</p>
+                    <div class="bg-white border border-slate-200 rounded-2xl p-5">
+                        <p id="gmailFoundSource" class="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed"></p>
+                    </div>
+                </div>
+
+                <div>
+                    <p class="text-xs uppercase tracking-[0.25em] text-slate-500 mb-2">Extracted Flight Data</p>
+                    <div class="bg-white border border-slate-200 rounded-2xl p-5">
+                        <dl id="gmailExtractedDetails" class="space-y-3 text-sm text-slate-700"></dl>
+                    </div>
+                </div>
+            </section>
+
+            <section class="p-8">
+                <div class="flex items-center justify-between gap-4 mb-4">
+                    <div>
+                        <p class="text-xs uppercase tracking-[0.25em] text-slate-500 mb-2">Generated Claim Draft</p>
+                        <h3 id="gmailDraftTitle" class="text-2xl font-bold text-slate-900">Formal compensation request</h3>
+                    </div>
+                    <button id="gmailBackBtn" class="rounded-full border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 transition-colors">
+                        Back
+                    </button>
+                </div>
+
+                <div class="rounded-2xl border border-slate-200 bg-slate-50 p-5 mb-5">
+                    <p id="gmailFoundOutcome" class="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed"></p>
+                </div>
+
+                <pre id="gmailDraftLetter" class="rounded-2xl bg-slate-950 text-slate-100 p-6 text-sm leading-relaxed whitespace-pre-wrap overflow-auto max-h-[620px]"></pre>
+            </section>
+        </div>
+    </div>
+
+    <script src="scripts.js?v=20260416b"></script>
 </body>
 </html>

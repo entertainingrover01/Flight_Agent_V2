@@ -1,4 +1,11 @@
 venv/
+.venv/
 __pycache__/
 *.pyc
+.DS_Store
 
+backend/.env
+backend/backend.log
+backend/config/gmail_oauth_state.json
+backend/config/gmail_token.json
+backend/config/google_client_secret.json
