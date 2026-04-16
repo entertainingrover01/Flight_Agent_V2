@@ -1,9 +1,10 @@
 """
 LangChain-based Claim Analysis Agent
 Core AI reasoning engine for the Bureaucracy Hacker system
+Now using OpenAI GPT instead of Claude
 """
 from langchain.agents import AgentExecutor, create_tool_calling_agent
-from langchain_anthropic import ChatAnthropic
+from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
 from typing import Optional, Dict, Any
 import json
@@ -14,20 +15,22 @@ from models.schemas import ClaimResponse
 class ClaimAnalysisAgent:
     """
     Autonomous agent that analyzes flight compensation claims
-    using Claude + LangChain + domain-specific tools
+    using OpenAI GPT + LangChain + domain-specific tools
     """
     
     def __init__(self, api_key: Optional[str] = None):
-        """Initialize the agent with Claude and tools"""
+        """Initialize the agent with OpenAI and tools"""
         
-        self.llm = ChatAnthropic(
-            model="claude-3-5-sonnet-20241022",
+        self.llm = ChatOpenAI(
+            model="gpt-3.5-turbo",  # Cheapest! (~$0.001 per 1K tokens)
+            # OR use: model="gpt-4" for better accuracy (more expensive)
             temperature=0,  # Deterministic for legal decisions
             max_tokens=4096,
             api_key=api_key
         )
         
         self.tools = get_all_tools()
+
         
         self.system_prompt = """
 You are an expert aviation compensation specialist and legal analyst. Your role is to 
