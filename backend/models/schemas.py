@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Any
 from datetime import datetime
 
 class ClaimRequest(BaseModel):
@@ -58,3 +58,18 @@ class ClaimHistory(BaseModel):
     compensation_amount: int
     created_at: datetime
     updated_at: datetime
+
+
+class ChatMessage(BaseModel):
+    role: str  # "user" or "assistant"
+    content: str
+
+
+class ChatRequest(BaseModel):
+    message: str
+    history: List[ChatMessage] = []
+
+
+class ChatResponse(BaseModel):
+    response: str
+    analysis: Optional[Any] = None

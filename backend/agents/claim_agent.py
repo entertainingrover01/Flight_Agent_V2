@@ -7,7 +7,7 @@ import logging
 import time
 from dotenv import load_dotenv
 from langgraph.prebuilt import create_react_agent
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import SystemMessage, HumanMessage
 from typing import Optional, Dict, Any
 import json
@@ -62,18 +62,18 @@ class ClaimAnalysisAgent:
         """Initialize the agent with Google Gemini and tools"""
         
         if api_key is None:
-            api_key = os.getenv("GOOGLE_API_KEY")
-        
-        if not api_key:
-            raise ValueError("GOOGLE_API_KEY not found. Please set it in .env file or as environment variable.")
-        
-        model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+            api_key = os.getenv("ANTHROPIC_API_KEY")
 
-        self.llm = ChatGoogleGenerativeAI(
+        if not api_key:
+            raise ValueError("ANTHROPIC_API_KEY not found. Please set it in .env file or as environment variable.")
+
+        model_name = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-6")
+
+        self.llm = ChatAnthropic(
             model=model_name,
-            temperature=0,  # Deterministic for legal decisions
-            max_output_tokens=2048,
-            google_api_key=api_key
+            temperature=0,
+            max_tokens=2048,
+            anthropic_api_key=api_key,
         )
         
         self.tools = get_all_tools()
@@ -112,13 +112,14 @@ class ClaimAnalysisAgent:
         logger.info("[Claim %s] Step 1/5: Preparing agent", request_label)
         agent = self._create_agent()
         
+        # made changes to Reported delay in Flight Information
         user_message = f"""
 Please analyze this flight compensation claim:
 
 FLIGHT INFORMATION:
 - Flight Number: {claim_data['flight_number']}
 - Flight Date: {claim_data['flight_date']}
-- Reported Delay: {claim_data['delay_minutes']} minutes
+- Reported Delay: {claim_data['delay_minutes']} minutes ({round(claim_data['delay_minutes']/60, 1)} hours)
 - Airline's Stated Reason: {claim_data['delay_reason']}
 - Passenger Location: {claim_data.get('jurisdiction', 'EU')}
 
@@ -135,7 +136,7 @@ Return ONLY valid JSON with no additional text.
 """
         
         try:
-            logger.info("[Claim %s] Step 2/5: Sending analysis request to Gemini", request_label)
+            logger.info("[Claim %s] Step 2/5: Sending analysis request to Claude", request_label)
             result = agent.invoke({
                 "messages": [
                     SystemMessage(content=SYSTEM_PROMPT),
