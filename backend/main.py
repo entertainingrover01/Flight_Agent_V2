@@ -15,6 +15,7 @@ load_dotenv()
 
 # Import our agent and models
 from agents.claim_agent import get_agent
+from agents.chat_agent import get_chat_agent
 from gmail_service import (
     GmailConfigurationError,
     build_formal_claim_letter,
@@ -25,7 +26,7 @@ from gmail_service import (
     gmail_status,
     scan_inbox_for_claims,
 )
-from models.schemas import ClaimRequest, ClaimResponse
+from models.schemas import ClaimRequest, ClaimResponse, ChatRequest, ChatResponse
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -124,6 +125,23 @@ async def analyze_claim(request: ClaimRequest) -> ClaimResponse:
             status_code=500,
             detail=f"Error analyzing claim: {str(e)}"
         )
+
+@app.post("/api/chat", response_model=ChatResponse)
+async def chat_endpoint(request: ChatRequest) -> ChatResponse:
+    """
+    Conversational endpoint — accepts a user message plus prior turn history,
+    returns the assistant's reply and an optional structured analysis object.
+    """
+    logger.info("Chat message received (history length: %d)", len(request.history))
+    try:
+        chat_agent = get_chat_agent()
+        history = [{"role": msg.role, "content": msg.content} for msg in request.history]
+        result = chat_agent.chat(request.message, history)
+        return ChatResponse(response=result["response"], analysis=result.get("analysis"))
+    except Exception as e:
+        logger.exception("Chat endpoint error")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/api/gmail/status")
 async def gmail_connection_status():
