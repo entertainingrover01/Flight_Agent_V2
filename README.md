@@ -56,13 +56,20 @@ flowchart LR
     API --> GMAIL["gmail_service.py"]
     API --> CLAIM["ClaimAnalysisAgent"]
 
-    CHAT --> TOOLS["claim_tools.py"]
-    GMAIL --> CLAIM
-    CLAIM --> TOOLS
+    CHAT --> VALIDATE["Flight details validation step"]
+    GMAIL --> EXTRACT["Email extraction step"]
+    EXTRACT --> VALIDATE
+    VALIDATE --> TOOLS["claim_tools.py"]
+    TOOLS --> FLIGHTAPI["Flight validation provider<br/>AeroDataBox / aviationstack / mock"]
+    TOOLS --> WEATHER["Weather verification tool"]
     CLAIM --> GEM["Gemini"]
+    VALIDATE --> CLAIM
+    WEATHER --> CLAIM
 
     API --> DASH["Backend Activity View :8001"]
     API --> UI["Frontend Result Cards"]
+    CLAIM --> DASH
+    GMAIL --> DASH
 ```
 
 ## Verification pipeline
@@ -70,14 +77,16 @@ flowchart LR
 ```mermaid
 flowchart TD
     A["Flight number + scheduled date"] --> B["Live flight lookup"]
-    B --> C{"Flight verified?"}
+    B --> B2["Flight details validation app/provider call"]
+    B2 --> C{"Flight verified?"}
     C -- No --> D["Return provider-unavailable or retry guidance"]
     C -- Yes --> E["EU coverage check"]
     E --> F{"EU261 covered?"}
     F -- No --> G["Return non-EU coverage result"]
-    F -- Yes --> H["Weather check"]
+    F -- Yes --> H["Weather verification"]
     H --> I["Gemini compensation analysis"]
-    I --> J["Eligibility result + next steps"]
+    I --> J["Eligibility result + next steps + draft letter"]
+    J --> K["Backend dashboard + frontend result cards"]
 ```
 
 ## Manual chat flow
@@ -86,13 +95,15 @@ flowchart TD
 flowchart TD
     A["User starts chat"] --> B["Ask for flight number"]
     B --> C["Ask for scheduled date"]
-    C --> D["Verify flight"]
+    C --> D["Call flight validation step"]
     D --> E{"Likely match found?"}
     E -- Yes --> F["Ask user to confirm flight"]
     E -- No --> G["Ask for corrections or explain provider issue"]
     F --> H["Collect disruption outcome"]
     H --> I["Collect arrival delay / cancellation outcome"]
-    I --> J["Run claim analysis"]
+    I --> J["Collect passenger details for draft letter"]
+    J --> K["Run claim analysis"]
+    K --> L["Show result in UI and backend dashboard"]
 ```
 
 ## Gmail scan flow
@@ -105,8 +116,9 @@ flowchart TD
     D --> E{"Claim-ready email found?"}
     E -- No --> F["Show no-match result"]
     E -- Yes --> G["Extract flight details"]
-    G --> H["Run same verification pipeline as chat flow"]
-    H --> I["Show claim result + backend evidence"]
+    G --> H["Call flight details validation provider"]
+    H --> I["Run same claim-analysis pipeline as chat flow"]
+    I --> J["Show claim result + backend evidence"]
 ```
 
 ## Backend activity dashboard
