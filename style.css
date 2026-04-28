@@ -1,5 +1,8 @@
 body {
     font-family: 'Inter', sans-serif;
+    background:
+        radial-gradient(circle at top, rgba(59, 130, 246, 0.10), transparent 32%),
+        linear-gradient(180deg, #eef4ff 0%, #f8fafc 40%, #f1f5f9 100%);
 }
 
 /* ── Chat container ──────────────────────────────────────────────────────────── */
@@ -7,10 +10,186 @@ body {
 .chat-wrapper {
     height: 90vh;
     max-height: 760px;
+    backdrop-filter: blur(14px);
+    min-height: 0;
 }
 
 .messages-area {
     scroll-behavior: smooth;
+    min-height: 0;
+}
+
+.gmail-result-panel {
+    max-height: min(34vh, 320px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.welcome-shell {
+    min-height: 100%;
+    display: grid;
+    align-content: start;
+    gap: 14px;
+    padding: 4px 2px 10px;
+}
+
+.welcome-hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(240px, 0.8fr);
+    gap: 16px;
+    padding: 20px;
+    border-radius: 28px;
+    color: #0f172a;
+    background:
+        radial-gradient(circle at top right, rgba(16, 185, 129, 0.22), transparent 22%),
+        radial-gradient(circle at left center, rgba(37, 99, 235, 0.16), transparent 30%),
+        linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(240, 249, 255, 0.94));
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    box-shadow: 0 22px 56px rgba(15, 23, 42, 0.09);
+}
+
+.welcome-hero-copy {
+    min-width: 0;
+}
+
+.welcome-kicker {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.06);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: #1d4ed8;
+}
+
+.welcome-hero h2 {
+    margin-top: 12px;
+    font-size: clamp(2rem, 3.2vw, 3rem);
+    line-height: 0.98;
+    font-weight: 700;
+    letter-spacing: -0.04em;
+}
+
+.welcome-hero p {
+    margin-top: 14px;
+    max-width: 48ch;
+    font-size: 15px;
+    line-height: 1.65;
+    color: #475569;
+}
+
+.welcome-cta-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    margin-top: 18px;
+}
+
+.welcome-inline-note {
+    padding: 10px 12px;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.78);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    font-size: 12px;
+    color: #475569;
+}
+
+.welcome-inline-note strong {
+    color: #0f172a;
+}
+
+.welcome-highlight {
+    display: flex;
+    align-items: stretch;
+}
+
+.welcome-highlight-card {
+    width: 100%;
+    padding: 18px;
+    border-radius: 22px;
+    color: white;
+    background:
+        radial-gradient(circle at top, rgba(255, 255, 255, 0.15), transparent 35%),
+        linear-gradient(160deg, #0f172a 0%, #1d4ed8 55%, #0ea5e9 100%);
+    box-shadow: 0 18px 36px rgba(30, 64, 175, 0.25);
+}
+
+.welcome-highlight-label {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    opacity: 0.78;
+}
+
+.welcome-highlight-card ol {
+    margin-top: 14px;
+    padding-left: 18px;
+    font-size: 13px;
+    line-height: 1.75;
+}
+
+.welcome-grid {
+    display: grid;
+    gap: 14px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.welcome-card {
+    padding: 18px;
+    border-radius: 22px;
+    background: rgba(255, 255, 255, 0.84);
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    box-shadow: 0 14px 30px rgba(15, 23, 42, 0.05);
+}
+
+.welcome-card h3 {
+    font-size: 15px;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.welcome-card ul {
+    margin-top: 12px;
+    padding-left: 18px;
+    color: #475569;
+    font-size: 13px;
+    line-height: 1.65;
+}
+
+.welcome-card li + li {
+    margin-top: 8px;
+}
+
+.compact-grid {
+    gap: 12px;
+}
+
+.slim-card {
+    padding: 16px 18px;
+}
+
+.welcome-start-btn {
+    border: none;
+    border-radius: 16px;
+    padding: 14px 20px;
+    font-size: 14px;
+    font-weight: 700;
+    color: white;
+    background: linear-gradient(135deg, #0f172a, #2563eb);
+    box-shadow: 0 18px 36px rgba(37, 99, 235, 0.24);
+    transition: transform 180ms ease, box-shadow 180ms ease, opacity 180ms ease;
+}
+
+.welcome-start-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 22px 42px rgba(37, 99, 235, 0.28);
 }
 
 /* ── Textarea ────────────────────────────────────────────────────────────────── */
@@ -19,6 +198,42 @@ body {
     overflow-y: hidden;
     min-height: 44px;
     max-height: 128px;
+}
+
+.quick-reply-btn,
+.helper-action-btn {
+    border: 1px solid #cbd5e1;
+    border-radius: 999px;
+    padding: 9px 13px;
+    background: #f8fafc;
+    color: #0f172a;
+    font-size: 12px;
+    font-weight: 600;
+    transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.quick-reply-btn:hover,
+.helper-action-btn:hover {
+    background: #eff6ff;
+    border-color: #93c5fd;
+    transform: translateY(-1px);
+}
+
+.helper-action-btn {
+    border-radius: 14px;
+    background: #0f172a;
+    border-color: #0f172a;
+    color: white;
+}
+
+.helper-action-btn:hover {
+    background: #1e293b;
+    border-color: #1e293b;
+}
+
+.helper-date-input {
+    min-width: 180px;
+    background: white;
 }
 
 /* ── Typing dots ─────────────────────────────────────────────────────────────── */
@@ -48,3 +263,143 @@ body {
 
 details > summary { list-style: none; }
 details > summary::-webkit-details-marker { display: none; }
+
+/* ── Gmail connect status ───────────────────────────────────────────────────── */
+
+.connect-orb,
+.scanner-beacon {
+    position: relative;
+    width: 40px;
+    height: 40px;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #2563eb, #38bdf8);
+    box-shadow: 0 10px 24px rgba(37, 99, 235, 0.25);
+}
+
+.connect-orb span,
+.scanner-beacon span {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    border: 1px solid rgba(59, 130, 246, 0.32);
+    animation: signal-pulse 2.1s ease-out infinite;
+}
+
+.connect-orb span:nth-child(2),
+.scanner-beacon span:nth-child(2) {
+    animation-delay: 0.6s;
+}
+
+.connect-orb span:nth-child(3),
+.scanner-beacon span:nth-child(3) {
+    animation-delay: 1.2s;
+}
+
+.status-chip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 40px;
+    padding: 10px 12px;
+    border-radius: 14px;
+    border: 1px solid rgba(148, 163, 184, 0.25);
+    background: rgba(255, 255, 255, 0.72);
+    color: #475569;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.status-dot,
+.scan-step-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: #cbd5e1;
+    flex-shrink: 0;
+}
+
+.status-dot-active,
+.scan-step-dot-active {
+    background: #2563eb;
+    box-shadow: 0 0 0 6px rgba(37, 99, 235, 0.14);
+    animation: beacon-blink 1.2s ease-in-out infinite;
+}
+
+.status-dot-done,
+.scan-step-dot-done {
+    background: #10b981;
+}
+
+/* ── Gmail scan animation ──────────────────────────────────────────────────── */
+
+.gmail-scan-shell {
+    border-radius: 18px;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    background:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(240, 249, 255, 0.95)),
+        radial-gradient(circle at top right, rgba(16, 185, 129, 0.08), transparent 30%);
+    padding: 16px;
+}
+
+.gmail-scan-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.gmail-progress-track {
+    width: 100%;
+    height: 9px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: rgba(148, 163, 184, 0.18);
+}
+
+.gmail-progress-bar {
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #2563eb, #0ea5e9, #10b981);
+    background-size: 180% 100%;
+    animation: progress-flow 1.6s linear infinite;
+    transition: width 0.4s ease;
+}
+
+.scan-step {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 28px;
+}
+
+/* ── Animations ─────────────────────────────────────────────────────────────── */
+
+@keyframes signal-pulse {
+    0% {
+        transform: scale(1);
+        opacity: 0.8;
+    }
+    100% {
+        transform: scale(1.9);
+        opacity: 0;
+    }
+}
+
+@keyframes beacon-blink {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.15); }
+}
+
+@keyframes progress-flow {
+    0% { background-position: 0% 50%; }
+    100% { background-position: 180% 50%; }
+}
+
+@media (max-width: 720px) {
+    .welcome-hero {
+        grid-template-columns: 1fr;
+    }
+
+    .welcome-grid {
+        grid-template-columns: 1fr;
+    }
+}

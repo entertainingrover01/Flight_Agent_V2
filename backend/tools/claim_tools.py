@@ -4,10 +4,295 @@ Domain-specific tools for the claim analysis agent
 from langchain.tools import tool
 from typing import Dict, Any
 import json
+import os
 from datetime import datetime
+from json import JSONDecodeError
+
+import httpx
 
 class FlightToolkit:
     """Collection of tools for flight data queries"""
+
+    AVIATIONSTACK_BASE_URL = "https://api.aviationstack.com/v1/flights"
+    AERODATABOX_APIMARKET_BASE_URL = "https://prod.api.market/api/v1/aedbx/aerodatabox"
+    AERODATABOX_RAPIDAPI_BASE_URL = "https://aerodatabox.p.rapidapi.com"
+
+    @staticmethod
+    def _extract_code_parts(flight_number: str) -> tuple[str, str]:
+        normalized = flight_number.upper().replace(" ", "")
+        prefix = ""
+        digits = ""
+        for char in normalized:
+            if char.isalpha() and not digits:
+                prefix += char
+            elif char.isdigit():
+                digits += char
+        return prefix, digits
+
+    @staticmethod
+    def _safe_int(value: Any, default: int = 0) -> int:
+        try:
+            if value is None:
+                return default
+            return int(float(value))
+        except (TypeError, ValueError):
+            return default
+
+    @staticmethod
+    def _provider_error_payload(flight_number: str, date: str, provider: str, message: str) -> Dict[str, Any]:
+        return {
+            "flight": flight_number.upper().replace(" ", ""),
+            "date": date,
+            "lookup_status": "error",
+            "error": message,
+            "data_source": provider,
+        }
+
+    @staticmethod
+    def _compute_delay_minutes(departure: Dict[str, Any], arrival: Dict[str, Any]) -> int:
+        arrival_delay = FlightToolkit._safe_int(arrival.get("delay"), -1)
+        if arrival_delay >= 0:
+            return arrival_delay
+
+        departure_delay = FlightToolkit._safe_int(departure.get("delay"), -1)
+        if departure_delay >= 0:
+            return departure_delay
+
+        return 0
+
+    @staticmethod
+    def _normalize_aviationstack_flight(record: Dict[str, Any], requested_flight_number: str, requested_date: str) -> Dict[str, Any]:
+        departure = record.get("departure") or {}
+        arrival = record.get("arrival") or {}
+        airline = record.get("airline") or {}
+        flight = record.get("flight") or {}
+
+        return {
+            "flight": flight.get("iata") or flight.get("icao") or requested_flight_number.upper().replace(" ", ""),
+            "date": record.get("flight_date") or requested_date,
+            "scheduled_departure": departure.get("scheduled"),
+            "actual_departure": departure.get("actual"),
+            "scheduled_arrival": arrival.get("scheduled"),
+            "actual_arrival": arrival.get("actual"),
+            "delay_minutes": FlightToolkit._compute_delay_minutes(departure, arrival),
+            "departure_airport": departure.get("iata") or departure.get("icao") or departure.get("airport") or "Unknown",
+            "arrival_airport": arrival.get("iata") or arrival.get("icao") or arrival.get("airport") or "Unknown",
+            "airport_code": arrival.get("iata") or arrival.get("icao") or "Unknown",
+            "airline": airline.get("name") or "Unknown airline",
+            "status": record.get("flight_status") or "unknown",
+            "data_source": "aviationstack",
+        }
+
+    @staticmethod
+    def _score_match(record: Dict[str, Any], requested_flight_number: str, requested_date: str) -> int:
+        flight = record.get("flight") or {}
+        departure = record.get("departure") or {}
+        arrival = record.get("arrival") or {}
+        normalized = requested_flight_number.upper().replace(" ", "")
+        prefix, digits = FlightToolkit._extract_code_parts(normalized)
+
+        score = 0
+        if (flight.get("iata") or "").upper() == normalized:
+            score += 100
+        if (flight.get("icao") or "").upper() == normalized:
+            score += 100
+        if digits and str(flight.get("number") or "") == digits:
+            score += 35
+
+        airline = record.get("airline") or {}
+        if len(prefix) == 2 and (airline.get("iata") or "").upper() == prefix:
+            score += 25
+        if len(prefix) == 3 and (airline.get("icao") or "").upper() == prefix:
+            score += 25
+
+        if record.get("flight_date") == requested_date:
+            score += 20
+
+        if departure.get("actual") or arrival.get("actual"):
+            score += 5
+
+        return score
+
+    @staticmethod
+    def _fetch_aviationstack_flight(flight_number: str, date: str) -> Dict[str, Any]:
+        access_key = os.getenv("AVIATIONSTACK_API_KEY")
+        if not access_key:
+            raise RuntimeError("AVIATIONSTACK_API_KEY is not configured.")
+
+        normalized = flight_number.upper().replace(" ", "")
+        prefix, digits = FlightToolkit._extract_code_parts(normalized)
+        params: Dict[str, Any] = {
+            "access_key": access_key,
+            "flight_date": date,
+            "limit": 10,
+        }
+
+        if len(prefix) == 2 and digits:
+            params["flight_iata"] = f"{prefix}{digits}"
+        elif len(prefix) == 3 and digits:
+            params["flight_icao"] = f"{prefix}{digits}"
+        elif digits:
+            params["flight_number"] = digits
+        else:
+            params["flight_iata"] = normalized
+
+        with httpx.Client(timeout=15.0) as client:
+            response = client.get(FlightToolkit.AVIATIONSTACK_BASE_URL, params=params)
+            response.raise_for_status()
+            payload = response.json()
+
+        if payload.get("error"):
+            error_info = payload["error"]
+            raise RuntimeError(error_info.get("message") or "aviationstack request failed")
+
+        results = payload.get("results") or payload.get("data") or []
+        if not results:
+            raise RuntimeError(f"No live flight data found for {flight_number} on {date}.")
+
+        best = max(results, key=lambda record: FlightToolkit._score_match(record, normalized, date))
+        return FlightToolkit._normalize_aviationstack_flight(best, normalized, date)
+
+    @staticmethod
+    def _extract_nested_code(value: Any) -> Any:
+        if isinstance(value, dict):
+            return (
+                value.get("iata")
+                or value.get("icao")
+                or value.get("code")
+                or value.get("shortName")
+                or value.get("name")
+            )
+        return value
+
+    @staticmethod
+    def _normalize_aerodatabox_flight(record: Dict[str, Any], requested_flight_number: str, requested_date: str) -> Dict[str, Any]:
+        departure = record.get("departure") or {}
+        arrival = record.get("arrival") or {}
+        airline = record.get("airline") or {}
+        local_flight = record.get("number") or requested_flight_number.upper().replace(" ", "")
+
+        scheduled_departure_local = (departure.get("scheduledTime") or {}).get("local") if isinstance(departure.get("scheduledTime"), dict) else departure.get("scheduledTime")
+        revised_departure_local = (departure.get("revisedTime") or {}).get("local") if isinstance(departure.get("revisedTime"), dict) else departure.get("revisedTime")
+        runway_departure_local = (departure.get("runwayTime") or {}).get("local") if isinstance(departure.get("runwayTime"), dict) else departure.get("runwayTime")
+        scheduled_arrival_local = (arrival.get("scheduledTime") or {}).get("local") if isinstance(arrival.get("scheduledTime"), dict) else arrival.get("scheduledTime")
+        revised_arrival_local = (arrival.get("revisedTime") or {}).get("local") if isinstance(arrival.get("revisedTime"), dict) else arrival.get("revisedTime")
+        runway_arrival_local = (arrival.get("runwayTime") or {}).get("local") if isinstance(arrival.get("runwayTime"), dict) else arrival.get("runwayTime")
+
+        delay_minutes = 0
+        if scheduled_arrival_local and revised_arrival_local:
+            try:
+                scheduled_dt = datetime.fromisoformat(scheduled_arrival_local.replace("Z", "+00:00"))
+                revised_dt = datetime.fromisoformat(revised_arrival_local.replace("Z", "+00:00"))
+                delay_minutes = max(int((revised_dt - scheduled_dt).total_seconds() / 60), 0)
+            except ValueError:
+                delay_minutes = 0
+
+        return {
+            "flight": local_flight,
+            "date": requested_date,
+            "scheduled_departure": scheduled_departure_local,
+            "actual_departure": revised_departure_local or runway_departure_local,
+            "scheduled_arrival": scheduled_arrival_local,
+            "actual_arrival": revised_arrival_local or runway_arrival_local,
+            "delay_minutes": delay_minutes,
+            "departure_airport": FlightToolkit._extract_nested_code(departure.get("airport")) or "Unknown",
+            "arrival_airport": FlightToolkit._extract_nested_code(arrival.get("airport")) or "Unknown",
+            "airport_code": FlightToolkit._extract_nested_code(arrival.get("airport")) or "Unknown",
+            "airline": airline.get("name") or "Unknown airline",
+            "status": record.get("status") or "unknown",
+            "data_source": "aerodatabox",
+        }
+
+    @staticmethod
+    def _fetch_aerodatabox_flight(flight_number: str, date: str) -> Dict[str, Any]:
+        api_market_key = os.getenv("AERODATABOX_APIMARKET_KEY")
+        rapidapi_key = os.getenv("AERODATABOX_RAPIDAPI_KEY")
+        if not api_market_key and not rapidapi_key:
+            raise RuntimeError("AERODATABOX_APIMARKET_KEY or AERODATABOX_RAPIDAPI_KEY is not configured.")
+
+        normalized = flight_number.upper().replace(" ", "")
+        if api_market_key:
+            url = f"{FlightToolkit.AERODATABOX_APIMARKET_BASE_URL}/flights/Number/{normalized}/{date}"
+            headers = {
+                "x-magicapi-key": api_market_key,
+            }
+        else:
+            url = f"{FlightToolkit.AERODATABOX_RAPIDAPI_BASE_URL}/flights/Number/{normalized}/{date}"
+            headers = {
+                "X-RapidAPI-Key": rapidapi_key,
+                "X-RapidAPI-Host": os.getenv("AERODATABOX_RAPIDAPI_HOST", "aerodatabox.p.rapidapi.com"),
+            }
+        params = {
+            "dateLocalRole": "Departure",
+        }
+
+        with httpx.Client(timeout=20.0) as client:
+            response = client.get(url, headers=headers, params=params)
+            response.raise_for_status()
+            try:
+                payload = response.json()
+            except JSONDecodeError as exc:
+                raise RuntimeError(
+                    "The live flight verification service returned an unreadable response. Please try again in a moment."
+                ) from exc
+
+        results = payload if isinstance(payload, list) else payload.get("data") or payload.get("items") or []
+        if not results:
+            raise RuntimeError(f"No AeroDataBox flight data found for {flight_number} on {date}.")
+
+        record = results[0]
+        return FlightToolkit._normalize_aerodatabox_flight(record, normalized, date)
+
+    @staticmethod
+    def _mock_flight_record(flight_number: str, date: str) -> Dict[str, Any]:
+        normalized = flight_number.upper().replace(" ", "")
+
+        if normalized in {"WS714", "WJA714"}:
+            return {
+                "flight": normalized,
+                "date": date,
+                "scheduled_departure": "08:00 PST",
+                "actual_departure": "08:55 PST",
+                "scheduled_arrival": "15:35 EST",
+                "actual_arrival": "16:20 EST",
+                "delay_minutes": 45,
+                "departure_airport": "YVR",
+                "arrival_airport": "YYZ",
+                "airport_code": "YYZ",
+                "airline": "WestJet",
+                "status": "landed",
+            }
+
+        if normalized.startswith("BA"):
+            return {
+                "flight": normalized,
+                "date": date,
+                "scheduled_departure": "12:10 UTC",
+                "actual_departure": "12:42 UTC",
+                "scheduled_arrival": "14:30 UTC",
+                "actual_arrival": "18:45 UTC",
+                "delay_minutes": 255,
+                "departure_airport": "BCN",
+                "arrival_airport": "LHR",
+                "airport_code": "LHR",
+                "airline": "British Airways",
+                "status": "landed",
+            }
+
+        return {
+            "flight": normalized,
+            "date": date,
+            "scheduled_departure": "10:00 UTC",
+            "actual_departure": "10:20 UTC",
+            "scheduled_arrival": "14:30 UTC",
+            "actual_arrival": "18:45 UTC",
+            "delay_minutes": 255,
+            "departure_airport": "Unknown",
+            "arrival_airport": "LHR",
+            "airport_code": "LHR",
+            "airline": "Unknown airline",
+            "status": "landed",
+        }
     
     @staticmethod
     @tool
@@ -20,17 +305,36 @@ class FlightToolkit:
             flight_number: e.g., "BA123"
             date: e.g., "2024-01-15"
         """
-        # Mock response - replace with real API: FlightRadar24, AviationStack, etc.
-        mock_data = {
-            "flight": flight_number,
-            "date": date,
-            "scheduled_arrival": "14:30 UTC",
-            "actual_arrival": "18:45 UTC",
-            "delay_minutes": 255,
-            "airport_code": "LHR",
-            "airline": "British Airways",
-            "status": "landed"
-        }
+        if os.getenv("AERODATABOX_APIMARKET_KEY") or os.getenv("AERODATABOX_RAPIDAPI_KEY"):
+            try:
+                live_data = FlightToolkit._fetch_aerodatabox_flight(flight_number, date)
+                return json.dumps(live_data)
+            except Exception as exc:
+                return json.dumps(
+                    FlightToolkit._provider_error_payload(
+                        flight_number,
+                        date,
+                        "aerodatabox",
+                        str(exc),
+                    )
+                )
+
+        if os.getenv("AVIATIONSTACK_API_KEY"):
+            try:
+                live_data = FlightToolkit._fetch_aviationstack_flight(flight_number, date)
+                return json.dumps(live_data)
+            except Exception as exc:
+                return json.dumps(
+                    FlightToolkit._provider_error_payload(
+                        flight_number,
+                        date,
+                        "aviationstack",
+                        str(exc),
+                    )
+                )
+
+        mock_data = FlightToolkit._mock_flight_record(flight_number, date)
+        mock_data["data_source"] = "mock"
         return json.dumps(mock_data)
     
     @staticmethod

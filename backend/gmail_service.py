@@ -56,7 +56,7 @@ class GmailConfigurationError(RuntimeError):
 def _load_client_config() -> Dict[str, Any]:
     client_id = os.getenv("GOOGLE_OAUTH_CLIENT_ID")
     client_secret = os.getenv("GOOGLE_OAUTH_CLIENT_SECRET")
-    redirect_uri = os.getenv("GOOGLE_OAUTH_REDIRECT_URI", "http://127.0.0.1:8001/api/gmail/callback")
+    redirect_uri = os.getenv("GOOGLE_OAUTH_REDIRECT_URI", "http://localhost:8001/api/gmail/callback")
 
     if client_id and client_secret:
         return {
@@ -79,7 +79,7 @@ def _load_client_config() -> Dict[str, Any]:
 
 
 def _get_redirect_uri() -> str:
-    return os.getenv("GOOGLE_OAUTH_REDIRECT_URI", "http://127.0.0.1:8001/api/gmail/callback")
+    return os.getenv("GOOGLE_OAUTH_REDIRECT_URI", "http://localhost:8001/api/gmail/callback")
 
 
 def _get_frontend_url() -> str:
@@ -100,7 +100,8 @@ def get_authorization_url() -> str:
     auth_url, state = flow.authorization_url(
         access_type="offline",
         include_granted_scopes="true",
-        prompt="consent",
+        # Force Google's account picker so the user can switch Gmail accounts.
+        prompt="consent select_account",
     )
     _ensure_parent(STATE_PATH)
     STATE_PATH.write_text(json.dumps({

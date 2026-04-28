@@ -21,6 +21,11 @@ class ClaimResponse(BaseModel):
     reasoning: str
     next_steps: List[str]
     confidence: float  # 0-1, how confident in the decision
+    verified_flight: Optional[Any] = None
+    weather_evidence: Optional[Any] = None
+    verification_summary: Optional[str] = None
+    eu_coverage: Optional[Any] = None
+    workflow_steps: Optional[Any] = None
 
 class FlightData(BaseModel):
     """Flight information from external APIs"""
@@ -73,3 +78,4 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     response: str
     analysis: Optional[Any] = None
+    ui_action: Optional[Any] = None

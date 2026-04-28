@@ -6,11 +6,11 @@
     <title>FlightClaim AI — EU261 Compensation Assistant</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=20260428h">
 </head>
 <body class="bg-slate-100 min-h-screen flex items-center justify-center p-4">
 
-    <div class="chat-wrapper w-full max-w-2xl bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-slate-200">
+    <div class="chat-wrapper w-full max-w-4xl bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-slate-200">
 
         <!-- Header -->
         <div class="flex items-center gap-3 px-5 py-4 border-b border-slate-100 bg-white flex-shrink-0">
@@ -29,8 +29,110 @@
             </div>
         </div>
 
+        <div class="px-4 pt-4 pb-3 border-b border-slate-100 bg-slate-50 flex-shrink-0">
+            <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div class="flex items-start justify-between gap-3">
+                    <div>
+                        <h2 class="text-sm font-semibold text-slate-900">Scan From Gmail</h2>
+                        <p class="text-xs text-slate-500 mt-1">Connect Gmail, scan recent airline emails, and auto-build a claim analysis.</p>
+                    </div>
+                    <span id="gmailStatusBadge" class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">Checking...</span>
+                </div>
+                <div class="mt-3 flex flex-wrap gap-2">
+                    <button id="gmailConnectBtn" class="rounded-xl bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800 transition-colors">Connect Gmail</button>
+                    <button id="gmailScanBtn" class="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">Scan Inbox</button>
+                    <button id="gmailDisconnectBtn" class="rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">Disconnect</button>
+                </div>
+                <p id="gmailStatusText" class="mt-3 text-xs text-slate-500">Checking Gmail connection status...</p>
+                <div id="gmailResult" class="hidden mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 gmail-result-panel"></div>
+                <div id="gmailConnectPanel" class="hidden mt-3 rounded-2xl border border-blue-200 bg-blue-50/80 p-4">
+                    <div class="flex items-start gap-3">
+                        <div class="connect-orb flex-shrink-0">
+                            <span></span>
+                            <span></span>
+                            <span></span>
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <p id="gmailConnectTitle" class="text-sm font-semibold text-slate-900">Opening Google sign-in</p>
+                                <span class="inline-flex items-center rounded-full bg-white px-2 py-1 text-[11px] font-medium text-blue-700 ring-1 ring-blue-200">Live status</span>
+                            </div>
+                            <p id="gmailConnectMessage" class="mt-1 text-xs leading-5 text-slate-600">A Google sign-in window should appear. If it does not, use the backup link below.</p>
+                            <div class="mt-3 flex flex-wrap gap-2">
+                                <a id="gmailConnectLink" href="#" target="_blank" rel="noopener noreferrer" class="inline-flex items-center rounded-xl bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800 transition-colors">Open Google sign-in</a>
+                                <button id="gmailConnectDismissBtn" class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors">Hide</button>
+                            </div>
+                            <div class="mt-3 grid gap-2 sm:grid-cols-3">
+                                <div class="status-chip">
+                                    <span class="status-dot status-dot-active"></span>
+                                    Launching sign-in
+                                </div>
+                                <div class="status-chip">
+                                    <span class="status-dot"></span>
+                                    Waiting for Google permission
+                                </div>
+                                <div class="status-chip">
+                                    <span class="status-dot"></span>
+                                    Refreshing Gmail status
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="welcomeScreen" class="flex-1 min-h-0 overflow-y-auto px-4 py-5 messages-area">
+            <div class="welcome-shell">
+                <div class="welcome-hero">
+                    <div class="welcome-hero-copy">
+                        <span class="welcome-kicker">Flight disruption intake</span>
+                        <h2>Check eligibility fast, before you spend time on a claim.</h2>
+                        <p>
+                            Start with your flight number and travel date. We verify the route, check EU261 coverage,
+                            and turn the result into a clear claim path.
+                        </p>
+                        <div class="welcome-cta-row">
+                            <button id="startChatBtn" class="welcome-start-btn">Start claim check</button>
+                            <div class="welcome-inline-note">
+                                <strong>Best start:</strong> flight number + scheduled date
+                            </div>
+                        </div>
+                    </div>
+                    <div class="welcome-highlight">
+                        <div class="welcome-highlight-card">
+                            <span class="welcome-highlight-label">What happens next</span>
+                            <ol>
+                                <li>Enter your flight details</li>
+                                <li>We verify the flight and route</li>
+                                <li>You get a claim decision and draft letter</li>
+                            </ol>
+                        </div>
+                    </div>
+                </div>
+                <div class="welcome-grid compact-grid">
+                    <div class="welcome-card slim-card">
+                        <h3>How it works</h3>
+                        <ul>
+                            <li>Enter the flight number and scheduled date.</li>
+                            <li>We verify the route, airline, and delay details.</li>
+                            <li>If it is EU-covered, we continue with weather and claim analysis.</li>
+                        </ul>
+                    </div>
+                    <div class="welcome-card slim-card">
+                        <h3>What to prepare</h3>
+                        <ul>
+                            <li>Your flight number and scheduled travel date.</li>
+                            <li>Any airline emails, delay notices, or rebooking messages.</li>
+                            <li>The quickest option is to connect Gmail and scan recent airline emails.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Messages area -->
-        <div id="messagesArea" class="flex-1 overflow-y-auto px-4 py-5 space-y-4 messages-area">
+        <div id="messagesArea" class="hidden flex-1 min-h-0 overflow-y-auto px-4 py-5 space-y-4 messages-area">
         </div>
 
         <!-- Typing indicator -->
@@ -53,16 +155,29 @@
 
         <!-- Input area -->
         <div class="px-4 pb-4 pt-3 border-t border-slate-100 bg-white flex-shrink-0">
+            <div id="responseHelperBar" class="hidden mb-3 space-y-2">
+                <div id="quickReplyRow" class="flex flex-wrap gap-2"></div>
+                <div id="dateHelperRow" class="hidden flex flex-wrap items-center gap-2">
+                    <input
+                        id="datePickerInput"
+                        type="date"
+                        class="helper-date-input rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <button id="useDateBtn" class="helper-action-btn">Use date</button>
+                </div>
+            </div>
             <div class="flex items-end gap-2.5">
                 <textarea
                     id="chatInput"
-                    placeholder="Describe your flight issue or ask a question..."
+                    placeholder="Press Start claim check to begin..."
                     class="chat-input flex-1 resize-none rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all leading-relaxed"
                     rows="1"
+                    disabled
                 ></textarea>
                 <button
                     id="sendBtn"
                     class="flex-shrink-0 w-11 h-11 bg-blue-600 rounded-xl flex items-center justify-center hover:bg-blue-700 focus:ring-4 focus:ring-blue-200 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                    disabled
                 >
                     <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"/>
@@ -74,6 +189,6 @@
 
     </div>
 
-    <script src="scripts.js"></script>
+    <script src="scripts.js?v=20260428h"></script>
 </body>
 </html>
